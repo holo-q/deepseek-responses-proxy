@@ -1,11 +1,26 @@
 [project]
 name = "deepseek-responses-proxy"
 version = "0.1.0"
-description = "Local Responses API shim for Codex -> DeepSeek Chat Completions"
+description = "Local Responses API shim for Codex custom providers backed by Chat Completions upstreams"
 readme = "README.md"
-authors = [{ name = "nuck", email = "teoxysoft@gmail.com" }]
+authors = [{ name = "Holo-Q" }]
 requires-python = ">=3.11"
 dependencies = []
+keywords = ["codex", "responses-api", "chat-completions", "deepseek", "agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/holo-q/deepseek-responses-proxy"
+Repository = "https://github.com/holo-q/deepseek-responses-proxy"
+Issues = "https://github.com/holo-q/deepseek-responses-proxy/issues"
 
 [project.scripts]
 deepseek-responses-proxy = "deepseek_responses_proxy.app:main"
