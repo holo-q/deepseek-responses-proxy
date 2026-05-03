@@ -42,11 +42,19 @@ def flatten_content(content: Any) -> str:
     return str(content)
 
 
+def reasoning_content_from_item(item: Json) -> str:
+    content = flatten_content(item.get("content", ""))
+    if content:
+        return content
+    return flatten_content(item.get("summary", ""))
+
+
 def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
     messages: list[Json] = []
     stats: Json = {
         "input_items": 0,
         "reasoning_items_dropped": 0,
+        "reasoning_items_replayed": 0,
         "function_outputs": 0,
         "function_calls_replayed": 0,
     }
@@ -68,6 +76,15 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
 
     stats["input_items"] = len(input_value)
     pending_assistant_tool_calls: list[Json] = []
+    pending_assistant_reasoning = ""
+
+    def attach_pending_reasoning(message: Json) -> Json:
+        nonlocal pending_assistant_reasoning
+        if pending_assistant_reasoning:
+            message["reasoning_content"] = pending_assistant_reasoning
+            pending_assistant_reasoning = ""
+        return message
+
     for item in input_value:
         if isinstance(item, str):
             messages.append({"role": "user", "content": item})
@@ -78,7 +95,14 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
 
         item_type = item.get("type")
         if item_type == "reasoning":
-            stats["reasoning_items_dropped"] += 1
+            reasoning = reasoning_content_from_item(item)
+            if reasoning:
+                pending_assistant_reasoning = (
+                    f"{pending_assistant_reasoning}\n{reasoning}" if pending_assistant_reasoning else reasoning
+                )
+                stats["reasoning_items_replayed"] += 1
+            else:
+                stats["reasoning_items_dropped"] += 1
             continue
 
         if item_type == "function_call":
@@ -98,11 +122,13 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
         if item_type == "function_call_output":
             if pending_assistant_tool_calls:
                 messages.append(
-                    {
-                        "role": "assistant",
-                        "content": "",
-                        "tool_calls": pending_assistant_tool_calls,
-                    }
+                    attach_pending_reasoning(
+                        {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": pending_assistant_tool_calls,
+                        }
+                    )
                 )
                 pending_assistant_tool_calls = []
             messages.append(
@@ -121,18 +147,24 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
         if role not in {"system", "user", "assistant", "tool"}:
             role = "user"
         message: Json = {"role": role, "content": flatten_content(item.get("content", ""))}
+        if role == "assistant":
+            attach_pending_reasoning(message)
         if role == "tool" and item.get("tool_call_id"):
             message["tool_call_id"] = item["tool_call_id"]
         messages.append(message)
 
     if pending_assistant_tool_calls:
         messages.append(
-            {
-                "role": "assistant",
-                "content": "",
-                "tool_calls": pending_assistant_tool_calls,
-            }
+            attach_pending_reasoning(
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": pending_assistant_tool_calls,
+                }
+            )
         )
+    elif pending_assistant_reasoning:
+        messages.append(attach_pending_reasoning({"role": "assistant", "content": ""}))
 
     if not messages:
         messages.append({"role": "user", "content": ""})
@@ -347,4 +379,3 @@ def _first_choice(chat: Json) -> Json:
     if isinstance(choices, list) and choices and isinstance(choices[0], dict):
         return choices[0]
     return {}
-

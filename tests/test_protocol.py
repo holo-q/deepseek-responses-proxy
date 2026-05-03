@@ -56,6 +56,33 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(stats["tools"]["forwarded_tools"], 1)
         self.assertEqual(stats["tools"]["dropped_tools"], 1)
 
+    def test_reasoning_content_replays_before_tool_calls(self) -> None:
+        chat, stats = responses_payload_to_chat_payload(
+            {
+                "model": "deepseek-v4-flash",
+                "input": [
+                    {"type": "message", "role": "user", "content": "inspect"},
+                    {
+                        "type": "reasoning",
+                        "content": [{"type": "reasoning_text", "text": "Need to read the file."}],
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": "call_123",
+                        "name": "read_file",
+                        "arguments": "{\"path\":\"README.md\"}",
+                    },
+                    {"type": "function_call_output", "call_id": "call_123", "output": "contents"},
+                ],
+            }
+        )
+
+        self.assertEqual(chat["messages"][1]["role"], "assistant")
+        self.assertEqual(chat["messages"][1]["reasoning_content"], "Need to read the file.")
+        self.assertEqual(chat["messages"][1]["tool_calls"][0]["id"], "call_123")
+        self.assertEqual(stats["messages"]["reasoning_items_replayed"], 1)
+        self.assertEqual(stats["messages"]["reasoning_items_dropped"], 0)
+
     def test_chat_completion_maps_to_response_message_and_sse(self) -> None:
         response = chat_completion_to_response(
             {
