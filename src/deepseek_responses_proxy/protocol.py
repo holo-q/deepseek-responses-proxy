@@ -77,6 +77,7 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
     stats["input_items"] = len(input_value)
     pending_assistant_tool_calls: list[Json] = []
     pending_assistant_reasoning = ""
+    pending_assistant_content = ""
 
     def attach_pending_reasoning(message: Json) -> Json:
         nonlocal pending_assistant_reasoning
@@ -84,6 +85,16 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
             message["reasoning_content"] = pending_assistant_reasoning
             pending_assistant_reasoning = ""
         return message
+
+    def pending_assistant_message() -> Json:
+        nonlocal pending_assistant_content
+        message: Json = {
+            "role": "assistant",
+            "content": pending_assistant_content,
+            "tool_calls": pending_assistant_tool_calls,
+        }
+        pending_assistant_content = ""
+        return attach_pending_reasoning(message)
 
     for item in input_value:
         if isinstance(item, str):
@@ -121,15 +132,7 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
 
         if item_type == "function_call_output":
             if pending_assistant_tool_calls:
-                messages.append(
-                    attach_pending_reasoning(
-                        {
-                            "role": "assistant",
-                            "content": "",
-                            "tool_calls": pending_assistant_tool_calls,
-                        }
-                    )
-                )
+                messages.append(pending_assistant_message())
                 pending_assistant_tool_calls = []
             messages.append(
                 {
@@ -147,6 +150,13 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
         if role not in {"system", "user", "assistant", "tool"}:
             role = "user"
         message: Json = {"role": role, "content": flatten_content(item.get("content", ""))}
+        if role == "assistant" and pending_assistant_tool_calls:
+            content = message["content"]
+            if content:
+                pending_assistant_content = (
+                    f"{pending_assistant_content}\n{content}" if pending_assistant_content else content
+                )
+            continue
         if role == "assistant":
             attach_pending_reasoning(message)
         if role == "tool" and item.get("tool_call_id"):
@@ -154,15 +164,7 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
         messages.append(message)
 
     if pending_assistant_tool_calls:
-        messages.append(
-            attach_pending_reasoning(
-                {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": pending_assistant_tool_calls,
-                }
-            )
-        )
+        messages.append(pending_assistant_message())
     elif pending_assistant_reasoning:
         messages.append(attach_pending_reasoning({"role": "assistant", "content": ""}))
 

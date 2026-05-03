@@ -83,6 +83,39 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(stats["messages"]["reasoning_items_replayed"], 1)
         self.assertEqual(stats["messages"]["reasoning_items_dropped"], 0)
 
+    def test_assistant_text_between_tool_call_and_output_merges_into_tool_call_message(self) -> None:
+        chat, _stats = responses_payload_to_chat_payload(
+            {
+                "model": "deepseek-v4-pro",
+                "input": [
+                    {"type": "message", "role": "user", "content": "inspect"},
+                    {
+                        "type": "reasoning",
+                        "content": [{"type": "reasoning_text", "text": "Need to read files."}],
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": "call_1",
+                        "name": "read_file",
+                        "arguments": "{\"path\":\"tests/test_simple.py\"}",
+                    },
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": "Let me inspect the test."}],
+                    },
+                    {"type": "function_call_output", "call_id": "call_1", "output": "contents"},
+                ],
+            }
+        )
+
+        assistant = chat["messages"][1]
+        self.assertEqual(assistant["role"], "assistant")
+        self.assertEqual(assistant["content"], "Let me inspect the test.")
+        self.assertEqual(assistant["reasoning_content"], "Need to read files.")
+        self.assertEqual(assistant["tool_calls"][0]["id"], "call_1")
+        self.assertEqual(chat["messages"][2]["role"], "tool")
+
     def test_chat_completion_maps_to_response_message_and_sse(self) -> None:
         response = chat_completion_to_response(
             {
