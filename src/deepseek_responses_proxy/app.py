@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import traceback
@@ -27,6 +28,7 @@ class ProxyConfig:
         port: int,
         deepseek_base_url: str,
         api_key_env: str,
+        api_key_pass: str | None,
         trace_body: bool,
         timeout_sec: float,
     ) -> None:
@@ -34,6 +36,7 @@ class ProxyConfig:
         self.port = port
         self.deepseek_base_url = deepseek_base_url.rstrip("/")
         self.api_key_env = api_key_env
+        self.api_key_pass = api_key_pass
         self.trace_body = trace_body
         self.timeout_sec = timeout_sec
 
@@ -168,9 +171,7 @@ def handle_responses_request(payload: Json, config: ProxyConfig, request_id: str
 
 
 def call_deepseek_chat(chat_payload: Json, config: ProxyConfig, request_id: str) -> Json:
-    api_key = os.environ.get(config.api_key_env)
-    if not api_key:
-        raise ProxyError(HTTPStatus.UNAUTHORIZED, f"missing ${config.api_key_env}")
+    api_key = resolve_api_key(config, request_id)
 
     url = f"{config.deepseek_base_url}/chat/completions"
     raw_payload = json.dumps(chat_payload).encode("utf-8")
@@ -204,12 +205,75 @@ def call_deepseek_chat(chat_payload: Json, config: ProxyConfig, request_id: str)
         raise ProxyError(HTTPStatus.BAD_GATEWAY, f"DeepSeek network error: {exc.reason}") from exc
 
 
+def resolve_api_key(config: ProxyConfig, request_id: str) -> str:
+    api_key = os.environ.get(config.api_key_env)
+    if api_key:
+        trace("credential.source", request_id=request_id, source="env", env=config.api_key_env)
+        return api_key
+
+    if config.api_key_pass:
+        trace("credential.lookup", request_id=request_id, source="pass", entry=config.api_key_pass)
+        try:
+            completed = subprocess.run(
+                ["pass", "show", config.api_key_pass],
+                check=False,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=10,
+            )
+        except FileNotFoundError as exc:
+            trace(
+                "credential.failed",
+                request_id=request_id,
+                source="pass",
+                entry=config.api_key_pass,
+                reason="pass_not_found",
+            )
+            raise ProxyError(
+                HTTPStatus.UNAUTHORIZED,
+                f"missing API key: set ${config.api_key_env} or install pass and create {config.api_key_pass}",
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            trace(
+                "credential.failed",
+                request_id=request_id,
+                source="pass",
+                entry=config.api_key_pass,
+                reason="timeout",
+            )
+            raise ProxyError(
+                HTTPStatus.UNAUTHORIZED,
+                f"missing API key: set ${config.api_key_env} or fix pass entry {config.api_key_pass} lookup timeout",
+            ) from exc
+
+        first_line = completed.stdout.splitlines()[0].strip() if completed.stdout.splitlines() else ""
+        if completed.returncode == 0 and first_line:
+            trace("credential.source", request_id=request_id, source="pass", entry=config.api_key_pass)
+            return first_line
+
+        trace(
+            "credential.failed",
+            request_id=request_id,
+            source="pass",
+            entry=config.api_key_pass,
+            returncode=completed.returncode,
+            stderr=completed.stderr.strip()[:500],
+        )
+
+    attempted = f"${config.api_key_env}"
+    if config.api_key_pass:
+        attempted = f"{attempted} or pass:{config.api_key_pass}"
+    raise ProxyError(HTTPStatus.UNAUTHORIZED, f"missing API key: set {attempted}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Codex Responses API shim for DeepSeek Chat Completions")
     parser.add_argument("--bind", default=os.environ.get("DEEPSEEK_PROXY_BIND", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("DEEPSEEK_PROXY_PORT", "8787")))
     parser.add_argument("--deepseek-base-url", default=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
     parser.add_argument("--api-key-env", default=os.environ.get("DEEPSEEK_PROXY_API_KEY_ENV", "DEEPSEEK_API_KEY"))
+    parser.add_argument("--api-key-pass", default=os.environ.get("DEEPSEEK_PROXY_API_KEY_PASS", "api-keys/deepseek"))
     parser.add_argument("--timeout-sec", type=float, default=float(os.environ.get("DEEPSEEK_PROXY_TIMEOUT_SEC", "180")))
     parser.add_argument("--trace-body", action="store_true", default=os.environ.get("DEEPSEEK_PROXY_TRACE_BODY") == "1")
     return parser
@@ -222,6 +286,7 @@ def main(argv: list[str] | None = None) -> None:
         port=args.port,
         deepseek_base_url=args.deepseek_base_url,
         api_key_env=args.api_key_env,
+        api_key_pass=args.api_key_pass,
         trace_body=args.trace_body,
         timeout_sec=args.timeout_sec,
     )
@@ -233,6 +298,7 @@ def main(argv: list[str] | None = None) -> None:
         port=config.port,
         deepseek_base_url=config.deepseek_base_url,
         api_key_env=config.api_key_env,
+        api_key_pass=config.api_key_pass,
     )
     try:
         server.serve_forever()
@@ -244,4 +310,3 @@ def main(argv: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
-

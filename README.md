@@ -1,7 +1,9 @@
 # DeepSeek Responses Proxy
 
 Local adapter for the awkward boundary between current Codex custom providers
-and DeepSeek V4.
+and any upstream that speaks OpenAI-style Chat Completions. It ships with
+DeepSeek V4 defaults because that is the first target we needed to hook into
+Codex.
 
 Codex `0.128.0` rejects `wire_api = "chat"` and expects Responses-shaped custom
 providers. DeepSeek V4 officially exposes OpenAI Chat Completions and Anthropic
@@ -16,9 +18,17 @@ Codex /responses
 ## Run
 
 ```bash
-export DEEPSEEK_API_KEY=sk-...
+pass insert api-keys/deepseek
 uv run deepseek-responses-proxy --port 8787
 ```
+
+The key source order is:
+
+1. `$DEEPSEEK_API_KEY`
+2. `pass show api-keys/deepseek`
+
+Use `--api-key-env`, `--api-key-pass`, and `--deepseek-base-url` to point the
+same adapter at another OpenAI Chat Completions upstream.
 
 Point Codex at:
 
@@ -26,7 +36,7 @@ Point Codex at:
 [model_providers.deepseek]
 name = "DeepSeek"
 base_url = "http://127.0.0.1:8787/v1"
-env_key = "DEEPSEEK_API_KEY"
+experimental_bearer_token = "codex-deepseek-local"
 wire_api = "responses"
 ```
 
@@ -48,12 +58,10 @@ The unit is installed at:
 ~/Workspace/Daemons/deepseek-responses-proxy.service
 ```
 
-Secrets stay outside git. Put the key in the optional service env file:
+Secrets stay outside git. The daemon reads the upstream API key from pass:
 
 ```bash
-mkdir -p ~/.config/deepseek-responses-proxy
-printf 'DEEPSEEK_API_KEY=sk-...\n' > ~/.config/deepseek-responses-proxy/env
-chmod 600 ~/.config/deepseek-responses-proxy/env
+pass insert api-keys/deepseek
 ```
 
 Then restart:
