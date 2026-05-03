@@ -26,7 +26,7 @@ class ProxyConfig:
         *,
         bind: str,
         port: int,
-        deepseek_base_url: str,
+        chat_base_url: str,
         api_key_env: str,
         api_key_pass: str | None,
         trace_body: bool,
@@ -34,7 +34,7 @@ class ProxyConfig:
     ) -> None:
         self.bind = bind
         self.port = port
-        self.deepseek_base_url = deepseek_base_url.rstrip("/")
+        self.chat_base_url = chat_base_url.rstrip("/")
         self.api_key_env = api_key_env
         self.api_key_pass = api_key_pass
         self.trace_body = trace_body
@@ -157,7 +157,7 @@ def handle_responses_request(payload: Json, config: ProxyConfig, request_id: str
         upstream_model=chat_payload.get("model"),
         body=chat_payload if config.trace_body else None,
     )
-    chat = call_deepseek_chat(chat_payload, config, request_id)
+    chat = call_upstream_chat(chat_payload, config, request_id)
     response = chat_completion_to_response(chat, request_model=chat_payload.get("model"))
     trace(
         "response.converted",
@@ -170,10 +170,10 @@ def handle_responses_request(payload: Json, config: ProxyConfig, request_id: str
     return response
 
 
-def call_deepseek_chat(chat_payload: Json, config: ProxyConfig, request_id: str) -> Json:
+def call_upstream_chat(chat_payload: Json, config: ProxyConfig, request_id: str) -> Json:
     api_key = resolve_api_key(config, request_id)
 
-    url = f"{config.deepseek_base_url}/chat/completions"
+    url = f"{config.chat_base_url}/chat/completions"
     raw_payload = json.dumps(chat_payload).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -194,15 +194,15 @@ def call_deepseek_chat(chat_payload: Json, config: ProxyConfig, request_id: str)
             trace("upstream.done", request_id=request_id, status=response.status, bytes=len(body), elapsed_ms=elapsed_ms)
             value = json.loads(body)
             if not isinstance(value, dict):
-                raise ProxyError(HTTPStatus.BAD_GATEWAY, "DeepSeek returned non-object JSON")
+                raise ProxyError(HTTPStatus.BAD_GATEWAY, "upstream returned non-object JSON")
             return value
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         trace("upstream.error", request_id=request_id, status=exc.code, body=body[:2000])
-        raise ProxyError(HTTPStatus.BAD_GATEWAY, f"DeepSeek HTTP {exc.code}: {body[:1000]}") from exc
+        raise ProxyError(HTTPStatus.BAD_GATEWAY, f"upstream HTTP {exc.code}: {body[:1000]}") from exc
     except urllib.error.URLError as exc:
         trace("upstream.network_error", request_id=request_id, reason=str(exc.reason))
-        raise ProxyError(HTTPStatus.BAD_GATEWAY, f"DeepSeek network error: {exc.reason}") from exc
+        raise ProxyError(HTTPStatus.BAD_GATEWAY, f"upstream network error: {exc.reason}") from exc
 
 
 def resolve_api_key(config: ProxyConfig, request_id: str) -> str:
@@ -268,10 +268,15 @@ def resolve_api_key(config: ProxyConfig, request_id: str) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Codex Responses API shim for DeepSeek Chat Completions")
+    parser = argparse.ArgumentParser(description="Codex Responses API shim for OpenAI Chat Completions upstreams")
     parser.add_argument("--bind", default=os.environ.get("DEEPSEEK_PROXY_BIND", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("DEEPSEEK_PROXY_PORT", "8787")))
-    parser.add_argument("--deepseek-base-url", default=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"))
+    parser.add_argument(
+        "--chat-base-url",
+        "--deepseek-base-url",
+        dest="chat_base_url",
+        default=os.environ.get("CHAT_COMPLETIONS_BASE_URL", os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")),
+    )
     parser.add_argument("--api-key-env", default=os.environ.get("DEEPSEEK_PROXY_API_KEY_ENV", "DEEPSEEK_API_KEY"))
     parser.add_argument("--api-key-pass", default=os.environ.get("DEEPSEEK_PROXY_API_KEY_PASS", "api-keys/deepseek"))
     parser.add_argument("--timeout-sec", type=float, default=float(os.environ.get("DEEPSEEK_PROXY_TIMEOUT_SEC", "180")))
@@ -284,7 +289,7 @@ def main(argv: list[str] | None = None) -> None:
     config = ProxyConfig(
         bind=args.bind,
         port=args.port,
-        deepseek_base_url=args.deepseek_base_url,
+        chat_base_url=args.chat_base_url,
         api_key_env=args.api_key_env,
         api_key_pass=args.api_key_pass,
         trace_body=args.trace_body,
@@ -296,7 +301,7 @@ def main(argv: list[str] | None = None) -> None:
         "server.start",
         bind=config.bind,
         port=config.port,
-        deepseek_base_url=config.deepseek_base_url,
+        chat_base_url=config.chat_base_url,
         api_key_env=config.api_key_env,
         api_key_pass=config.api_key_pass,
     )

@@ -27,7 +27,7 @@ The key source order is:
 1. `$DEEPSEEK_API_KEY`
 2. `pass show api-keys/deepseek`
 
-Use `--api-key-env`, `--api-key-pass`, and `--deepseek-base-url` to point the
+Use `--api-key-env`, `--api-key-pass`, and `--chat-base-url` to point the
 same adapter at another OpenAI Chat Completions upstream.
 
 Point Codex at:

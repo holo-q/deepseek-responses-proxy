@@ -11,7 +11,7 @@ def make_config() -> ProxyConfig:
     return ProxyConfig(
         bind="127.0.0.1",
         port=8787,
-        deepseek_base_url="https://api.deepseek.com",
+        chat_base_url="https://api.deepseek.com",
         api_key_env="DEEPSEEK_API_KEY",
         api_key_pass="api-keys/deepseek",
         trace_body=False,
