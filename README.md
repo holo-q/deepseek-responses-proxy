@@ -79,6 +79,8 @@ The proxy accepts both `/responses` and `/v1/responses`.
 Point Codex at the local Responses endpoint from `~/.codex/config.toml`:
 
 ```toml
+model_catalog_json = "/home/you/.codex/deepseek-model-catalog.json"
+
 [sandbox_workspace_write]
 writable_roots = []
 network_access = false
@@ -126,6 +128,42 @@ codex -p deepseek-v4-flash
 `codex -m deepseek-v4-pro` changes only the model name. It leaves the provider
 on the default OpenAI/ChatGPT path and can produce a misleading "model is not
 supported when using Codex with a ChatGPT account" error.
+
+### Model Metadata
+
+Without a catalog entry, Codex prints this warning every turn:
+
+```text
+Model metadata for `deepseek-v4-pro` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.
+```
+
+`model_context_window = 1000000` is not enough to make the model known; it only
+overrides limits after model lookup. To suppress the warning, provide
+`model_catalog_json` with entries for `deepseek-v4-pro` and
+`deepseek-v4-flash`.
+
+The safest local pattern is to copy Codex's bundled `models.json` for your
+installed Codex version and append the DeepSeek entries, using an existing Codex
+model as the template so `base_instructions` stays intact. The resulting JSON
+must have the shape:
+
+```json
+{
+  "models": [
+    {
+      "slug": "deepseek-v4-pro",
+      "display_name": "DeepSeek V4 Pro",
+      "context_window": 1000000,
+      "max_context_window": 1000000,
+      "supported_in_api": true,
+      "base_instructions": "..."
+    }
+  ]
+}
+```
+
+Keep the full model object fields from the Codex template; the snippet above is
+only the identifying part.
 
 ## Codex Agents
 
