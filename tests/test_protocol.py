@@ -56,6 +56,35 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(stats["tools"]["forwarded_tools"], 1)
         self.assertEqual(stats["tools"]["dropped_tools"], 1)
 
+    def test_custom_freeform_tools_convert_to_input_function_tools(self) -> None:
+        chat, stats = responses_payload_to_chat_payload(
+            {
+                "model": "deepseek-v4-flash",
+                "input": "patch the file",
+                "tools": [
+                    {
+                        "type": "custom",
+                        "name": "apply_patch",
+                        "description": "Use the `apply_patch` tool to edit files.",
+                        "format": {
+                            "type": "grammar",
+                            "syntax": "lark",
+                            "definition": "start: /.+/",
+                        },
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(stats["tools"]["forwarded_tools"], 1)
+        self.assertEqual(stats["tools"]["dropped_tools"], 0)
+        self.assertEqual(chat["tools"][0]["type"], "function")
+        function = chat["tools"][0]["function"]
+        self.assertEqual(function["name"], "apply_patch")
+        self.assertIn("custom/freeform", function["description"])
+        self.assertEqual(function["parameters"]["required"], ["input"])
+        self.assertFalse(function["parameters"]["additionalProperties"])
+
     def test_reasoning_content_replays_before_tool_calls(self) -> None:
         chat, stats = responses_payload_to_chat_payload(
             {

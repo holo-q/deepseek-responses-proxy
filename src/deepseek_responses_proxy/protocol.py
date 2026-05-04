@@ -185,6 +185,40 @@ def responses_tools_to_chat_tools(tools: Any) -> tuple[list[Json] | None, Json]:
             stats["dropped_tools"] += 1
             continue
         if tool.get("type") != "function":
+            if tool.get("type") == "custom":
+                name = tool.get("name")
+                if not isinstance(name, str) or not name:
+                    stats["dropped_tools"] += 1
+                    continue
+                description = tool.get("description", "")
+                if not isinstance(description, str):
+                    description = ""
+                chat_tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "description": (
+                                f"{description}\n\n"
+                                "This was a Responses custom/freeform tool. Provide JSON arguments "
+                                "with an `input` string containing the raw tool input."
+                            ),
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "input": {
+                                        "type": "string",
+                                        "description": "Raw input for the custom/freeform tool.",
+                                    }
+                                },
+                                "required": ["input"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    }
+                )
+                stats["forwarded_tools"] += 1
+                continue
             stats["dropped_tools"] += 1
             continue
 

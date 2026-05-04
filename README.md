@@ -29,6 +29,7 @@ Implemented now:
 - Responses `input` to chat `messages`
 - `instructions` and `developer` mapped into system messages
 - function tool schema passthrough where possible
+- custom/freeform tool adaptation into `{ "input": "..." }` function tools
 - DeepSeek `reasoning_content` replay across tool-call turns
 - non-streaming JSON Responses output
 - synthesized SSE for `stream: true`
@@ -36,7 +37,9 @@ Implemented now:
 
 Known limits:
 
-- Hosted Responses tools are dropped; only function schemas are forwarded.
+- Hosted Responses tools are dropped. Function schemas are forwarded, and
+  custom/freeform tools such as Codex's `apply_patch` are adapted into
+  Chat-Completions function tools with an `input` string argument.
 - SSE is synthesized after a non-streaming upstream call, so it is compatible
   with streaming clients but not token-realtime yet.
 - The bridge follows the request shapes observed from Codex and DeepSeek V4; new
