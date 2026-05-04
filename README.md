@@ -47,24 +47,22 @@ Known limits:
 
 ## Install
 
-From a checkout:
-
-```bash
-uv sync
-uv run deepseek-responses-proxy --help
-```
-
-As an executable package:
-
-```bash
-uv tool install git+https://github.com/holo-q/deepseek-responses-proxy
-```
-
-## Run Locally
+Recommended public install path:
 
 ```bash
 pass insert api-keys/deepseek
-uv run deepseek-responses-proxy --port 8787
+uvx --from git+https://github.com/holo-q/deepseek-responses-proxy deepseek-responses-proxy --help
+```
+
+Run the proxy without cloning:
+
+```bash
+uvx --from git+https://github.com/holo-q/deepseek-responses-proxy \
+  deepseek-responses-proxy \
+  --bind 127.0.0.1 \
+  --port 8787 \
+  --chat-base-url https://api.deepseek.com \
+  --api-key-pass api-keys/deepseek
 ```
 
 The key source order is:
@@ -76,6 +74,42 @@ Use `--api-key-env`, `--api-key-pass`, and `--chat-base-url` to point the
 same adapter at another OpenAI Chat Completions upstream.
 
 The proxy accepts both `/responses` and `/v1/responses`.
+
+From a development checkout:
+
+```bash
+uv sync
+uv run deepseek-responses-proxy --help
+```
+
+## Systemd User Service
+
+A ready-to-drop-in unit is included at
+`contrib/systemd/deepseek-responses-proxy.service`. It runs the GitHub version
+through `uvx`, binds only to localhost, and reads the upstream key from
+`pass:api-keys/deepseek`.
+
+Install it as a user service:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/deepseek-responses-proxy.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now deepseek-responses-proxy.service
+systemctl --user status deepseek-responses-proxy.service
+```
+
+After PyPI publishing, the `ExecStart` command can be shortened from:
+
+```text
+/usr/bin/env uvx --from git+https://github.com/holo-q/deepseek-responses-proxy deepseek-responses-proxy ...
+```
+
+to:
+
+```text
+/usr/bin/env uvx deepseek-responses-proxy ...
+```
 
 ## Codex Config
 
