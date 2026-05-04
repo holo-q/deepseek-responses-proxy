@@ -47,7 +47,28 @@ Known limits:
 
 ## Install
 
-Recommended public install path:
+On Arch Linux, install the AUR package:
+
+```bash
+yay -S deepseek-responses-proxy-git
+pass insert api-keys/deepseek
+systemctl --user enable --now deepseek-responses-proxy.service
+systemctl --user status deepseek-responses-proxy.service
+```
+
+The AUR package installs the CLI as `/usr/bin/deepseek-responses-proxy` and a
+user service at `/usr/lib/systemd/user/deepseek-responses-proxy.service`.
+
+If your AUR helper has not picked up a fresh package index yet, install from the
+AUR git repo directly:
+
+```bash
+git clone https://aur.archlinux.org/deepseek-responses-proxy-git.git
+cd deepseek-responses-proxy-git
+makepkg -si
+```
+
+No-package install path:
 
 ```bash
 pass insert api-keys/deepseek
@@ -88,6 +109,13 @@ A ready-to-drop-in unit is included at
 `contrib/systemd/deepseek-responses-proxy.service`. It runs the GitHub version
 through `uvx`, binds only to localhost, and reads the upstream key from
 `pass:api-keys/deepseek`.
+
+If you installed from AUR, use the packaged service instead:
+
+```bash
+systemctl --user enable --now deepseek-responses-proxy.service
+systemctl --user status deepseek-responses-proxy.service
+```
 
 Install it as a user service:
 
