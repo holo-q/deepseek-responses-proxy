@@ -90,7 +90,7 @@ def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
         nonlocal pending_assistant_content
         message: Json = {
             "role": "assistant",
-            "content": pending_assistant_content,
+            "content": "",
             "tool_calls": pending_assistant_tool_calls,
         }
         pending_assistant_content = ""

@@ -112,7 +112,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(stats["messages"]["reasoning_items_replayed"], 1)
         self.assertEqual(stats["messages"]["reasoning_items_dropped"], 0)
 
-    def test_assistant_text_between_tool_call_and_output_merges_into_tool_call_message(self) -> None:
+    def test_assistant_text_between_tool_call_and_output_is_dropped_for_strict_chat_shape(self) -> None:
         chat, _stats = responses_payload_to_chat_payload(
             {
                 "model": "deepseek-v4-pro",
@@ -140,7 +140,7 @@ class ProtocolTests(unittest.TestCase):
 
         assistant = chat["messages"][1]
         self.assertEqual(assistant["role"], "assistant")
-        self.assertEqual(assistant["content"], "Let me inspect the test.")
+        self.assertEqual(assistant["content"], "")
         self.assertEqual(assistant["reasoning_content"], "Need to read files.")
         self.assertEqual(assistant["tool_calls"][0]["id"], "call_1")
         self.assertEqual(chat["messages"][2]["role"], "tool")
