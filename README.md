@@ -168,6 +168,11 @@ must have the shape:
 Keep the full model object fields from the Codex template; the snippet above is
 only the identifying part.
 
+For `apply_patch_tool_type`, both Codex values are usable through this bridge:
+`freeform` is adapted into a Chat-Completions function tool at the proxy
+boundary, while `function` is already native to the upstream Chat shape. Keeping
+Codex's normal `freeform` setting is fine.
+
 ## Codex Agents
 
 Codex sub-agents can be backed by the same provider. Put these files under
