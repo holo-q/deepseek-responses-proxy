@@ -112,6 +112,33 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(stats["messages"]["reasoning_items_replayed"], 1)
         self.assertEqual(stats["messages"]["reasoning_items_dropped"], 0)
 
+    def test_reasoning_summary_replays_before_tool_calls(self) -> None:
+        chat, stats = responses_payload_to_chat_payload(
+            {
+                "model": "deepseek-v4-flash",
+                "input": [
+                    {"type": "message", "role": "user", "content": "inspect"},
+                    {
+                        "type": "reasoning",
+                        "summary": [{"type": "summary_text", "text": "Need to read the file."}],
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": "call_123",
+                        "name": "read_file",
+                        "arguments": "{\"path\":\"README.md\"}",
+                    },
+                    {"type": "function_call_output", "call_id": "call_123", "output": "contents"},
+                ],
+            }
+        )
+
+        self.assertEqual(chat["messages"][1]["role"], "assistant")
+        self.assertEqual(chat["messages"][1]["reasoning_content"], "Need to read the file.")
+        self.assertEqual(chat["messages"][1]["tool_calls"][0]["id"], "call_123")
+        self.assertEqual(stats["messages"]["reasoning_items_replayed"], 1)
+        self.assertEqual(stats["messages"]["reasoning_items_dropped"], 0)
+
     def test_assistant_text_between_tool_call_and_output_is_dropped_for_strict_chat_shape(self) -> None:
         chat, _stats = responses_payload_to_chat_payload(
             {
@@ -162,6 +189,27 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(events[0]["type"], "response.created")
         self.assertTrue(any(event["type"] == "response.output_text.delta" for event in events))
         self.assertEqual(events[-1]["type"], "response.completed")
+
+    def test_chat_completion_reasoning_uses_summary_not_content(self) -> None:
+        response = chat_completion_to_response(
+            {
+                "model": "deepseek-v4-pro",
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "reasoning_content": "Need a patch.",
+                        }
+                    }
+                ],
+            }
+        )
+
+        reasoning = response["output"][0]
+        self.assertEqual(reasoning["type"], "reasoning")
+        self.assertEqual(reasoning["summary"], [{"type": "summary_text", "text": "Need a patch."}])
+        self.assertNotIn("content", reasoning)
 
     def test_tool_call_round_trip_shapes_are_preserved(self) -> None:
         response = chat_completion_to_response(

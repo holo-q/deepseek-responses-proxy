@@ -42,11 +42,29 @@ def flatten_content(content: Any) -> str:
     return str(content)
 
 
+def flatten_summary(summary: Any) -> str:
+    if not isinstance(summary, list):
+        return flatten_content(summary)
+
+    parts: list[str] = []
+    for item in summary:
+        if isinstance(item, str):
+            parts.append(item)
+            continue
+        if not isinstance(item, dict):
+            parts.append(str(item))
+            continue
+        text = item.get("text")
+        if isinstance(text, str):
+            parts.append(text)
+    return "\n".join(part for part in parts if part)
+
+
 def reasoning_content_from_item(item: Json) -> str:
     content = flatten_content(item.get("content", ""))
     if content:
         return content
-    return flatten_content(item.get("summary", ""))
+    return flatten_summary(item.get("summary", ""))
 
 
 def responses_input_to_chat_messages(payload: Json) -> tuple[list[Json], Json]:
@@ -299,8 +317,7 @@ def chat_message_to_response_output(message: Json) -> list[Json]:
             {
                 "type": "reasoning",
                 "id": f"rs_{uuid.uuid4().hex}",
-                "summary": [],
-                "content": [{"type": "reasoning_text", "text": reasoning}],
+                "summary": [{"type": "summary_text", "text": reasoning}],
                 "status": "completed",
             }
         )
